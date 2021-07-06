@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -30,9 +30,13 @@ namespace httpsTest
             var client = new HttpClient(handler);
 
             // Output results
+            Console.Write("Writing to results.md ...");
+            var tmpOut = Console.Out;
+            using var fs = new FileStream("results.md", FileMode.Create);
+            using var sw = new StreamWriter(fs);
+            Console.SetOut(sw);
             Console.WriteLine("# Website protocol headers");
             Console.WriteLine();
-
             Console.WriteLine("| URL                    | HTTP Status Code  | HSTS Value |");
             Console.WriteLine("| ---------------------- | ----------------- | ---------: |");
 
@@ -40,6 +44,10 @@ namespace httpsTest
             {
                 try
                 {
+                    Console.SetOut(tmpOut);
+                    Console.Write(".");
+                    Console.SetOut(sw);
+
                     var httpStatusCode = await client.GetHttpStatusCodeAsync(site);
                     var hstsValue = await client.GetHstsValueAsync(site);
 
@@ -50,6 +58,10 @@ namespace httpsTest
                     Console.WriteLine($"| {site.PadRight(22)} | {"Connection error".PadRight(17)} | {"N/A".PadLeft(10)} |");
                 }
             }
+
+            sw.Close();
+            Console.SetOut(tmpOut);
+            Console.WriteLine(" Finished.");
         }
 
         private static async Task<string> GetHttpStatusCodeAsync(this HttpClient client, string site)
