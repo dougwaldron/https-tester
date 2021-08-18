@@ -1,6 +1,9 @@
 ### Project-specific
 
-# Generated files
+# Settings file
+appsettings.json
+
+# Output file
 results.md
 
 ### Standard .gitignore
