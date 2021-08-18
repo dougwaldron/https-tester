@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Spectre.Console;
 
 namespace httpsTest
 {
@@ -21,7 +22,7 @@ namespace httpsTest
 
             if (sites is null || sites.Count() == 0)
             {
-                Console.WriteLine("Provide a list of websites in the appconfig.json file.");
+                AnsiConsole.MarkupLine("[red]Provide a list of websites in the appconfig.json file.[/]");
                 return;
             }
 
@@ -29,42 +30,67 @@ namespace httpsTest
             var handler = new HttpClientHandler() { AllowAutoRedirect = false };
             var client = new HttpClient(handler);
 
-            // Output results
-            Console.Write("Writing to results.md ...");
-            var tmpOut = Console.Out;
+            // Output results to:
+            // - StringBuilder for file
+            // - Spectre Console for console
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("# Testing Website Protocol Headers");
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[bold]Testing Website Protocol Headers[/]");
+
+            sb.AppendLine();
+            AnsiConsole.WriteLine();
+
+            sb.AppendLine("Valid Status Code is \"Moved\".");
+            AnsiConsole.WriteLine("Valid Status Code is \"Moved\".");
+
+            sb.AppendLine();
+            AnsiConsole.WriteLine();
+
+            sb.AppendLine("| URL Tested             | HTTP Status Code  | HSTS Value |");
+            sb.AppendLine("| ---------------------- | ----------------- | ---------- |");
+
+            var table = new Table().Border(TableBorder.MinimalHeavyHead).Collapse();
+            table.AddColumn("URL Tested");
+            table.AddColumn("HTTP Status Code");
+            table.AddColumn("HSTS Value");
+
+            await AnsiConsole.Live(table).StartAsync(async c =>
+            {
+                // Test each site
+                foreach (string site in sites)
+                {
+                    try
+                    {
+                        var httpStatusCode = await client.GetHttpStatusCodeAsync(site);
+                        var hstsValue = await client.GetHstsValueAsync(site);
+
+                        sb.AppendLine($"| {site.PadRight(22)} | {httpStatusCode.Item1.PadRight(17)} | {hstsValue.PadLeft(10)} |");
+                        table.AddRow(site, httpStatusCode.Item2, hstsValue);
+                    }
+                    catch (HttpRequestException)
+                    {
+                        sb.AppendLine($"| {site.PadRight(22)} | {"Connection error".PadRight(17)} | {"N/A".PadLeft(10)} |");
+                        table.AddRow(site, "[red]Connection error[/]", "N/A");
+                    }
+
+                    c.Refresh();
+                }
+            });
+
+            // Write results to file
+            AnsiConsole.Markup(Emoji.Known.FloppyDisk + " Writing results to \"results.md\" ...");
             using var fs = new FileStream("results.md", FileMode.Create);
             using var sw = new StreamWriter(fs);
-            Console.SetOut(sw);
-            Console.WriteLine("# Website protocol headers");
-            Console.WriteLine();
-            Console.WriteLine("| URL                    | HTTP Status Code  | HSTS Value |");
-            Console.WriteLine("| ---------------------- | ----------------- | ---------: |");
-
-            foreach (string site in sites)
-            {
-                try
-                {
-                    Console.SetOut(tmpOut);
-                    Console.Write(".");
-                    Console.SetOut(sw);
-
-                    var httpStatusCode = await client.GetHttpStatusCodeAsync(site);
-                    var hstsValue = await client.GetHstsValueAsync(site);
-
-                    Console.WriteLine($"| {site.PadRight(22)} | {httpStatusCode.PadRight(17)} | {hstsValue.PadLeft(10)} |");
-                }
-                catch (HttpRequestException)
-                {
-                    Console.WriteLine($"| {site.PadRight(22)} | {"Connection error".PadRight(17)} | {"N/A".PadLeft(10)} |");
-                }
-            }
-
+            sw.Write(sb.ToString());
             sw.Close();
-            Console.SetOut(tmpOut);
-            Console.WriteLine(" Finished.");
+
+            AnsiConsole.WriteLine(" Finished.");
         }
 
-        private static async Task<string> GetHttpStatusCodeAsync(this HttpClient client, string site)
+        // First string is for Markdown file; second for Spectre Console.
+        private static async Task<(string, string)> GetHttpStatusCodeAsync(this HttpClient client, string site)
         {
             var response = await client.GetHttpHeadAsync($"http://{site}");
 
@@ -72,13 +98,19 @@ namespace httpsTest
             {
                 if (response.Headers.Location.ToString() == $"https://{site}/")
                 {
-                    return $"Valid: {response.StatusCode}";
+                    return (
+                        $"Valid response: \"{response.StatusCode}\"",
+                        $"[green]Valid response: \"{response.StatusCode}\"[/]");
                 }
 
-                return $"Invalid redirect: {response.Headers.Location}";
+                return (
+                    $"Invalid redirect: \"{response.Headers.Location}\"",
+                    $"[red]Invalid redirect: \"{response.Headers.Location}\"[/]");
             }
 
-            return $"Invalid response: {response.StatusCode}";
+            return (
+                $"Invalid response: \"{response.StatusCode}\"",
+                $"[red]Invalid response: \"{response.StatusCode}\"[/]");
         }
 
         private static async Task<string> GetHstsValueAsync(this HttpClient client, string site)
