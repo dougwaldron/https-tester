@@ -100,7 +100,7 @@ namespace httpsTest
                 {
                     return (
                         $"Valid response: \"{response.StatusCode}\"",
-                        $"[green]Valid response: \"{response.StatusCode}\"[/]");
+                        $"Valid response: \"{response.StatusCode}\"");
                 }
 
                 return (
@@ -124,7 +124,7 @@ namespace httpsTest
                 return values.First().Replace("max-age=", string.Empty);
             }
 
-            return "None";
+            return "[red]None[/]";
         }
 
         private static async Task<HttpResponseMessage> GetHttpHeadAsync(this HttpClient client, string url)
